@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:blobinator/blobinator.dart';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:test/test.dart';
 
@@ -451,6 +453,58 @@ void main() {
           .toList();
       final blobFiles = remainingFiles.where((f) => f.path.endsWith(blobId));
       expect(blobFiles, isEmpty);
+    });
+
+    test('Update blob after flush removes old disk file', () async {
+      const blobId = 'flush-update-test';
+      final originalData = Uint8List.fromList('original data'.codeUnits);
+      final updatedData = Uint8List.fromList(
+        'updated data with different size'.codeUnits,
+      );
+
+      // Put original blob data
+      await storage.put(blobId, originalData);
+
+      // Verify blob is in memory
+      expect(await storage.exists(blobId), isTrue);
+      final originalSize = await storage.getSize(blobId);
+      expect(originalSize, equals(originalData.length));
+
+      // Flush the blob to disk
+      final flushed = await storage.flush();
+      expect(flushed, equals(1));
+
+      // Get the disk file path to verify it exists
+      final hash = md5.convert(utf8.encode(blobId)).toString();
+      final dir1 = hash.substring(0, 2);
+      final dir2 = hash.substring(2, 4);
+      final diskFilePath = path.join(tempDir.path, dir1, dir2, blobId);
+      final diskFile = File(diskFilePath);
+
+      // Verify disk file exists with original size
+      expect(await diskFile.exists(), isTrue);
+      expect(await diskFile.length(), equals(originalData.length));
+
+      // Update the blob with different sized data
+      await storage.put(blobId, updatedData);
+
+      // Verify blob is back in memory with new data
+      expect(await storage.exists(blobId), isTrue);
+      final newSize = await storage.getSize(blobId);
+      expect(newSize, equals(updatedData.length));
+
+      // Verify disk file still exists but with updated size and data
+      expect(await diskFile.exists(), isTrue);
+      expect(await diskFile.length(), equals(updatedData.length));
+
+      // Verify disk file contains updated data
+      final diskData = await diskFile.readAsBytes();
+      expect(diskData, equals(updatedData));
+
+      // Verify we can retrieve the updated data
+      final retrievedData = await storage.get(blobId);
+      expect(retrievedData, isNotNull);
+      expect(retrievedData!.data, equals(updatedData));
     });
   });
 }
