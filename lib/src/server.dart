@@ -36,7 +36,7 @@ class BlobinatorServer {
     final size = await storage.getSize(blobId);
     final lastModified = await storage.getLastModified(blobId);
 
-    final headers = <String, String>{'content-length': size.toString()};
+    final headers = <String, String>{'content-length': (size ?? 0).toString()};
 
     if (lastModified != null) {
       headers['last-modified'] = HttpDate.format(lastModified);

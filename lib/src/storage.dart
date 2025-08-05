@@ -79,9 +79,9 @@ class BlobStorage {
     return false;
   }
 
-  /// Get blob size in bytes, returns -1 if not found.
-  Future<int> getSize(String blobId) async {
-    if (!_isValidBlobId(blobId)) return -1;
+  /// Get blob size in bytes.
+  Future<int?> getSize(String blobId) async {
+    if (!_isValidBlobId(blobId)) return null;
 
     if (_memoryStorage.containsKey(blobId)) {
       return _memoryStorage[blobId]!.sizeInBytes;
@@ -95,7 +95,7 @@ class BlobStorage {
       }
     }
 
-    return -1;
+    return null;
   }
 
   /// Get blob last modified time.
