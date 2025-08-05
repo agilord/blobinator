@@ -46,7 +46,7 @@ Alternatively, the `PUT /blobs/{id}?flush=true` can be used to immediately flush
 to disk.
 
 ### Blob IDs
-- **Characters**: `[a-z0-9._-]` only
+- **Characters**: `[a-zA-Z0-9._~-]` only
 - **Length**: 4-512 characters
 - **Client-generated**: No collision detection, use sufficiently random IDs
 

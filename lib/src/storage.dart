@@ -39,7 +39,7 @@ class BlobStorage {
 
   bool _isValidBlobId(String blobId) {
     if (blobId.length < 4 || blobId.length > 512) return false;
-    return RegExp(r'^[a-z0-9._-]+$').hasMatch(blobId);
+    return RegExp(r'^[a-zA-Z0-9._~-]+$').hasMatch(blobId);
   }
 
   /// Initialize the disk blob cache by scanning the filesystem

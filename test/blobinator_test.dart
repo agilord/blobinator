@@ -469,6 +469,56 @@ void main() {
         expect(getResponse.bodyBytes, equals(testData));
       }
     });
+
+    test('Expanded character set works via HTTP API', () async {
+      final testCases = [
+        'Test-With-Uppercase',
+        'MyBlobId',
+        'TEST123',
+        'test~with~tildes',
+        'file~backup~v1',
+        '~temp~file~',
+        'mixed.Case_With-All~Valid.chars123',
+      ];
+
+      for (final blobId in testCases) {
+        final testData = Uint8List.fromList('data for $blobId'.codeUnits);
+
+        // PUT the blob
+        final putResponse = await http.put(
+          Uri.parse('$baseUrl/blobs/$blobId'),
+          body: testData,
+        );
+        expect(
+          putResponse.statusCode,
+          equals(200),
+          reason: 'PUT should succeed for ID: $blobId',
+        );
+
+        // GET the blob
+        final getResponse = await http.get(Uri.parse('$baseUrl/blobs/$blobId'));
+        expect(
+          getResponse.statusCode,
+          equals(200),
+          reason: 'GET should succeed for ID: $blobId',
+        );
+        expect(getResponse.bodyBytes, equals(testData));
+
+        // HEAD the blob
+        final headResponse = await http.head(
+          Uri.parse('$baseUrl/blobs/$blobId'),
+        );
+        expect(
+          headResponse.statusCode,
+          equals(200),
+          reason: 'HEAD should succeed for ID: $blobId',
+        );
+        expect(
+          headResponse.headers['content-length'],
+          equals('${testData.length}'),
+        );
+      }
+    });
   });
 
   group('BlobStorage Unit Tests', () {
@@ -490,7 +540,13 @@ void main() {
     });
 
     test('Valid blob ID validation', () async {
-      final validIds = ['test', 'test-123', 'test_123', 'test.123', 'a1b2c3d4'];
+      final validIds = [
+        'test', 'test-123', 'test_123', 'test.123', 'a1b2c3d4',
+        // New expanded character set
+        'Test-With-Uppercase', 'MyBlobId', 'TEST123',
+        'test~with~tildes', 'file~backup~v1', '~temp~file~',
+        'mixed.Case_With-All~Valid.chars123',
+      ];
       for (final id in validIds) {
         final data = Uint8List.fromList('test'.codeUnits);
         await storage.put(id, data);
@@ -499,10 +555,41 @@ void main() {
     });
 
     test('Invalid blob ID validation', () async {
-      final invalidIds = ['ab', 'TEST', 'test@123', 'test#123', 'a' * 513];
+      final invalidIds = [
+        'ab', // Too short
+        'a' * 513, // Too long
+        // Invalid characters (not in [a-zA-Z0-9._~-])
+        'test@123', // @ symbol
+        'test#123', // # symbol
+        'test/path', // Forward slash
+        r'test\path', // Backslash
+        'test?query', // Question mark
+        'test with spaces', // Spaces
+        'test:colon', // Colon
+        'test*wildcard', // Asterisk
+        'test<greater', // Less than
+        'test>less', // Greater than
+        'test|pipe', // Pipe
+        'test"quote', // Double quote
+        "test'quote", // Single quote
+        'test%percent', // Percent
+        'test+plus', // Plus
+        'test=equals', // Equals
+        'test[bracket]', // Square brackets
+        'test{brace}', // Curly braces
+        'test(paren)', // Parentheses
+        'test;semicolon', // Semicolon
+        'test,comma', // Comma
+        'test&ampersand', // Ampersand
+        r'test$dollar', // Dollar sign
+      ];
       for (final id in invalidIds) {
         final data = Uint8List.fromList('test'.codeUnits);
-        expect(() => storage.put(id, data), throwsArgumentError);
+        expect(
+          () => storage.put(id, data),
+          throwsArgumentError,
+          reason: 'ID "$id" should be invalid',
+        );
       }
     });
 

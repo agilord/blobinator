@@ -3,6 +3,7 @@
 ## 0.1.2
 
 - `flush` parameter on updating a blob will immediately write it to disk.
+- Expanded character set for blob ids.
 
 ## 0.1.1
 
