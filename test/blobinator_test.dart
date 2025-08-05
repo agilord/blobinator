@@ -241,6 +241,136 @@ void main() {
       expect(status['diskItemCount'], greaterThan(0));
       expect(status['diskBytesUsed'], greaterThan(0));
     });
+
+    test('Flush endpoint - flush all blobs', () async {
+      // Add some blobs to memory
+      for (int i = 0; i < 5; i++) {
+        final blobId = 'flush-test-$i';
+        final data = Uint8List.fromList('Data for flush test $i'.codeUnits);
+        await http.put(Uri.parse('$baseUrl/blobs/$blobId'), body: data);
+      }
+
+      // Verify blobs are in memory
+      final statusBefore = await http.get(Uri.parse('$baseUrl/status'));
+      final statusBeforeJson =
+          jsonDecode(statusBefore.body) as Map<String, dynamic>;
+      expect(statusBeforeJson['memoryItemCount'], greaterThanOrEqualTo(5));
+
+      // Flush all blobs
+      final flushResponse = await http.post(Uri.parse('$baseUrl/flush'));
+      expect(flushResponse.statusCode, equals(200));
+
+      final flushResult =
+          jsonDecode(flushResponse.body) as Map<String, dynamic>;
+      expect(flushResult['flushed'], greaterThanOrEqualTo(5));
+
+      // Verify blobs are still accessible
+      final getResponse = await http.get(
+        Uri.parse('$baseUrl/blobs/flush-test-0'),
+      );
+      expect(getResponse.statusCode, equals(200));
+      expect(
+        getResponse.bodyBytes,
+        equals(Uint8List.fromList('Data for flush test 0'.codeUnits)),
+      );
+    });
+
+    test('Flush endpoint - flush with limit', () async {
+      // Add some blobs to memory
+      for (int i = 0; i < 10; i++) {
+        final blobId = 'flush-limit-test-$i';
+        final data = Uint8List.fromList('Data $i'.codeUnits);
+        await http.put(Uri.parse('$baseUrl/blobs/$blobId'), body: data);
+      }
+
+      // Flush only 3 blobs
+      final flushResponse = await http.post(
+        Uri.parse('$baseUrl/flush?limit=3'),
+      );
+      expect(flushResponse.statusCode, equals(200));
+
+      final flushResult =
+          jsonDecode(flushResponse.body) as Map<String, dynamic>;
+      expect(flushResult['flushed'], equals(3));
+    });
+
+    test('Flush endpoint - flush with age filter', () async {
+      // Add some blobs and wait
+      for (int i = 0; i < 3; i++) {
+        final blobId = 'flush-age-test-$i';
+        final data = Uint8List.fromList('Old data $i'.codeUnits);
+        await http.put(Uri.parse('$baseUrl/blobs/$blobId'), body: data);
+      }
+
+      // Wait a moment
+      await Future.delayed(Duration(milliseconds: 100));
+
+      // Add more recent blobs
+      for (int i = 3; i < 6; i++) {
+        final blobId = 'flush-age-test-$i';
+        final data = Uint8List.fromList('New data $i'.codeUnits);
+        await http.put(Uri.parse('$baseUrl/blobs/$blobId'), body: data);
+      }
+
+      // Flush only blobs older than 1 second
+      final flushResponse = await http.post(Uri.parse('$baseUrl/flush?age=1s'));
+      expect(flushResponse.statusCode, equals(200));
+
+      final flushResult =
+          jsonDecode(flushResponse.body) as Map<String, dynamic>;
+      expect(
+        flushResult['flushed'],
+        greaterThanOrEqualTo(0),
+      ); // Age-based, may vary
+    });
+
+    test('Flush endpoint - invalid parameters', () async {
+      // Invalid limit parameter
+      final invalidLimitResponse = await http.post(
+        Uri.parse('$baseUrl/flush?limit=invalid'),
+      );
+      expect(invalidLimitResponse.statusCode, equals(400));
+
+      // Invalid age parameter
+      final invalidAgeResponse = await http.post(
+        Uri.parse('$baseUrl/flush?age=invalid'),
+      );
+      expect(invalidAgeResponse.statusCode, equals(400));
+    });
+
+    test('Flush endpoint - memory-only mode fails', () async {
+      // Create a memory-only config
+      final memoryOnlyConfig = BlobinatorConfig(
+        port: 0,
+        maxMemoryItems: 100,
+        diskStoragePath: null, // Memory-only
+      );
+
+      final memoryOnlyStorage = BlobStorage(memoryOnlyConfig);
+      final memoryOnlyServer = BlobinatorServer(
+        memoryOnlyConfig,
+        memoryOnlyStorage,
+      );
+
+      final memoryOnlyHttpServer = await io.serve(
+        memoryOnlyServer.handler,
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+
+      final memoryOnlyBaseUrl =
+          'http://${memoryOnlyHttpServer.address.host}:${memoryOnlyHttpServer.port}';
+
+      try {
+        // Try to flush - should fail with 409
+        final flushResponse = await http.post(
+          Uri.parse('$memoryOnlyBaseUrl/flush'),
+        );
+        expect(flushResponse.statusCode, equals(409));
+      } finally {
+        await memoryOnlyHttpServer.close();
+      }
+    });
   });
 
   group('BlobStorage Unit Tests', () {

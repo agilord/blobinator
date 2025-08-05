@@ -27,6 +27,19 @@ void main() async {
   // Service status
   final status = await client.getStatus(); // ServiceStatus
 
+  // Flush memory blobs to disk
+  final flushed = await client.flush(); // int (number of blobs flushed)
+  final flushedLimited = await client.flush(
+    limit: 1000,
+  ); // Flush max 1000 blobs
+  final flushedOld = await client.flush(
+    age: Duration(hours: 1),
+  ); // Flush blobs older than 1 hour
+  final flushedCombined = await client.flush(
+    limit: 500,
+    age: Duration(minutes: 30),
+  ); // Combined
+
   // Clean up
   client.close();
 }

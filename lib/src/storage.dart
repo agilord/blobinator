@@ -368,6 +368,40 @@ class BlobStorage {
     _evictionHistory.removeWhere((s) => s.timestamp.isBefore(cutoff));
   }
 
+  Future<int> flush({int? limit, Duration? age}) async {
+    if (config.diskStoragePath == null) {
+      throw StateError('Cannot flush to disk when disk storage is disabled');
+    }
+
+    final entries = _memoryStorage.entries.toList();
+    entries.sort(
+      (a, b) => a.value.lastModified.compareTo(b.value.lastModified),
+    );
+
+    final now = DateTime.now();
+    final cutoff = age != null ? now.subtract(age) : null;
+    int flushed = 0;
+
+    for (final entry in entries) {
+      if (limit != null && flushed >= limit) break;
+
+      if (cutoff != null && entry.value.lastModified.isAfter(cutoff)) {
+        continue;
+      }
+
+      await _moveToMemoryToDisk(entry.key, entry.value);
+      _memoryBytesUsed -= entry.value.sizeInBytes;
+      _memoryStorage.remove(entry.key);
+      flushed++;
+    }
+
+    if (flushed > 0) {
+      _recordEviction(flushed, 0, 0, 0);
+    }
+
+    return flushed;
+  }
+
   ServiceStatus getStatus() {
     return ServiceStatus(
       memoryItemCount: _memoryStorage.length,

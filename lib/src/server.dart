@@ -6,6 +6,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 import 'config.dart';
 import 'storage.dart';
+import 'utils.dart';
 
 class BlobinatorServer {
   final BlobinatorConfig config;
@@ -18,7 +19,8 @@ class BlobinatorServer {
       ..get('/blobs/<blobId>', _handleGet)
       ..put('/blobs/<blobId>', _handlePut)
       ..delete('/blobs/<blobId>', _handleDelete)
-      ..get('/status', _handleStatus);
+      ..get('/status', _handleStatus)
+      ..post('/flush', _handleFlush);
   }
 
   Handler get handler => _router.call;
@@ -96,5 +98,35 @@ class BlobinatorServer {
     final json = jsonEncode(status.toJson());
 
     return Response.ok(json, headers: {'content-type': 'application/json'});
+  }
+
+  Future<Response> _handleFlush(Request request) async {
+    try {
+      final params = request.url.queryParameters;
+      int? limit;
+      Duration? age;
+
+      if (params.containsKey('limit')) {
+        limit = parseLimit(params['limit']!);
+      }
+
+      if (params.containsKey('age')) {
+        age = parseAge(params['age']!);
+      }
+
+      final flushed = await storage.flush(limit: limit, age: age);
+      final result = {'flushed': flushed};
+      final json = jsonEncode(result);
+
+      return Response.ok(json, headers: {'content-type': 'application/json'});
+    } catch (e) {
+      if (e is ArgumentError) {
+        return Response.badRequest(body: e.message);
+      }
+      if (e is StateError) {
+        return Response(409, body: e.message);
+      }
+      return Response.internalServerError(body: 'Failed to flush blobs');
+    }
   }
 }

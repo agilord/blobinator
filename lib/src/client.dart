@@ -198,6 +198,60 @@ class BlobinatorClient {
     final metadata = await head(blobId);
     return metadata?.lastModified;
   }
+
+  /// Flush memory blobs to disk
+  Future<int> flush({int? limit, Duration? age}) async {
+    final uri = Uri.parse('$baseUrl/flush');
+    final queryParams = <String, String>{};
+
+    if (limit != null) {
+      String limitStr;
+      if (limit >= 1000000000) {
+        limitStr = '${limit ~/ 1000000000}b';
+      } else if (limit >= 1000000) {
+        limitStr = '${limit ~/ 1000000}m';
+      } else if (limit >= 1000) {
+        limitStr = '${limit ~/ 1000}k';
+      } else {
+        limitStr = limit.toString();
+      }
+      queryParams['limit'] = limitStr;
+    }
+
+    if (age != null) {
+      String ageStr;
+      if (age.inDays > 0) {
+        ageStr = '${age.inDays}d';
+      } else if (age.inHours > 0) {
+        ageStr = '${age.inHours}h';
+      } else if (age.inMinutes > 0) {
+        ageStr = '${age.inMinutes}m';
+      } else {
+        ageStr = '${age.inSeconds}s';
+      }
+      queryParams['age'] = ageStr;
+    }
+
+    final flushUri = uri.replace(queryParameters: queryParams);
+    final response = await _httpClient.post(flushUri);
+
+    if (response.statusCode == 409) {
+      throw BlobinatorException('Cannot flush when disk storage is disabled');
+    }
+
+    if (response.statusCode == 400) {
+      throw BlobinatorException('Bad request: ${response.body}');
+    }
+
+    if (response.statusCode != 200) {
+      throw BlobinatorException(
+        'Flush request failed with status ${response.statusCode}',
+      );
+    }
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return json['flushed'] as int;
+  }
 }
 
 class BlobMetadata {

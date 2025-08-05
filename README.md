@@ -29,7 +29,18 @@ Blobinator provides a simple way to exchange temporary binary data between syste
 - **`PUT /blobs/{id}`** - Store blob data
 - **`HEAD /blobs/{id}`** - Get metadata (size, last-modified)
 - **`DELETE /blobs/{id}`** - Remove blob
+- **`POST /flush`** - Move memory blobs to disk storage
 - **`GET /status`** - Service statistics and metrics
+
+#### Flush Endpoint
+The `/flush` endpoint moves blobs from memory to disk storage and supports query parameters:
+- **`limit`** - Maximum number of blobs to flush (e.g., `100`, `1k`, `5m`, `2b`)
+- **`age`** - Only flush blobs older than specified duration (e.g., `30s`, `5m`, `2h`, `1d`)
+
+Examples:
+- `POST /flush` - Flush all memory blobs to disk
+- `POST /flush?limit=1000` - Flush oldest 1000 blobs to disk
+- `POST /flush?limit=5k&age=1h` - Flush up to 5000 blobs older than 1 hour
 
 ### Blob IDs
 - **Characters**: `[a-z0-9._-]` only
@@ -99,6 +110,12 @@ await client.delete('my-blob'); // bool (found and deleted)
 
 // Service status
 final status = await client.getStatus(); // ServiceStatus
+
+// Flush memory blobs to disk
+final flushed = await client.flush(); // int (number of blobs flushed)
+final flushedLimited = await client.flush(limit: 1000); // Flush max 1000 blobs
+final flushedOld = await client.flush(age: Duration(hours: 1)); // Flush blobs older than 1 hour
+final flushedCombined = await client.flush(limit: 500, age: Duration(minutes: 30)); // Combined
 
 // Clean up
 client.close();

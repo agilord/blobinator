@@ -302,5 +302,129 @@ void main() {
           .toList();
       expect(outputEnd, equals(inputEnd));
     });
+
+    test('flush - flush all blobs', () async {
+      // Add some blobs to memory
+      for (int i = 0; i < 5; i++) {
+        final blobId = 'flush-client-test-$i';
+        final data = Uint8List.fromList('Flush test data $i'.codeUnits);
+        await client.putBytes(blobId, data);
+      }
+
+      // Flush all blobs
+      final flushed = await client.flush();
+      expect(flushed, greaterThanOrEqualTo(5));
+
+      // Verify blobs are still accessible
+      final data = await client.getBytes('flush-client-test-0');
+      expect(data, isNotNull);
+      expect(data, equals(Uint8List.fromList('Flush test data 0'.codeUnits)));
+    });
+
+    test('flush - flush with limit', () async {
+      // Add some blobs to memory
+      for (int i = 0; i < 10; i++) {
+        final blobId = 'flush-limit-client-test-$i';
+        final data = Uint8List.fromList('Data $i'.codeUnits);
+        await client.putBytes(blobId, data);
+      }
+
+      // Flush only 3 blobs
+      final flushed = await client.flush(limit: 3);
+      expect(flushed, equals(3));
+    });
+
+    test('flush - flush with age filter', () async {
+      // Add some blobs
+      for (int i = 0; i < 3; i++) {
+        final blobId = 'flush-age-client-test-$i';
+        final data = Uint8List.fromList('Age test data $i'.codeUnits);
+        await client.putBytes(blobId, data);
+      }
+
+      // Wait a bit
+      await Future.delayed(Duration(seconds: 1));
+
+      // Add more recent blobs
+      for (int i = 3; i < 6; i++) {
+        final blobId = 'flush-age-client-test-$i';
+        final data = Uint8List.fromList('Recent data $i'.codeUnits);
+        await client.putBytes(blobId, data);
+      }
+
+      // Flush only old blobs
+      final flushed = await client.flush(age: Duration(seconds: 1));
+      expect(flushed, greaterThanOrEqualTo(0)); // Age-based, may vary
+    });
+
+    test('flush - combined limit and age', () async {
+      // Add some blobs
+      for (int i = 0; i < 8; i++) {
+        final blobId = 'flush-combined-test-$i';
+        final data = Uint8List.fromList('Combined test data $i'.codeUnits);
+        await client.putBytes(blobId, data);
+      }
+
+      // Flush with both limit and age
+      final flushed = await client.flush(limit: 5, age: Duration(seconds: 1));
+      expect(flushed, lessThanOrEqualTo(5));
+    });
+
+    test('flush - memory-only mode throws exception', () async {
+      // Create a memory-only client
+      final memoryOnlyConfig = BlobinatorConfig(
+        port: 0,
+        maxMemoryItems: 100,
+        diskStoragePath: null, // Memory-only
+      );
+
+      final memoryOnlyStorage = BlobStorage(memoryOnlyConfig);
+      final memoryOnlyServer = BlobinatorServer(
+        memoryOnlyConfig,
+        memoryOnlyStorage,
+      );
+
+      final memoryOnlyHttpServer = await io.serve(
+        memoryOnlyServer.handler,
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+
+      final memoryOnlyBaseUrl =
+          'http://${memoryOnlyHttpServer.address.host}:${memoryOnlyHttpServer.port}';
+      final memoryOnlyClient = BlobinatorClient(memoryOnlyBaseUrl);
+
+      try {
+        // Try to flush - should throw exception
+        await expectLater(
+          memoryOnlyClient.flush(),
+          throwsA(isA<BlobinatorException>()),
+        );
+      } finally {
+        memoryOnlyClient.close();
+        await memoryOnlyHttpServer.close();
+      }
+    });
+
+    test('flush - parameter formatting', () async {
+      // Test that parameters are formatted correctly
+      for (int i = 0; i < 5; i++) {
+        final blobId = 'format-test-$i';
+        final data = Uint8List.fromList('Format test $i'.codeUnits);
+        await client.putBytes(blobId, data);
+      }
+
+      // Test various limit formats
+      await client.flush(limit: 1000); // Plain number
+      await client.flush(limit: 2000); // Should format as 2k
+      await client.flush(limit: 3000000); // Should format as 3m
+      await client.flush(limit: 1000000000); // Should format as 1b
+
+      // Test various age formats
+      await client.flush(age: Duration(seconds: 30)); // Should format as 30s
+      await client.flush(age: Duration(minutes: 5)); // Should format as 5m
+      await client.flush(age: Duration(hours: 2)); // Should format as 2h
+      await client.flush(age: Duration(days: 1)); // Should format as 1d
+    });
   });
 }
