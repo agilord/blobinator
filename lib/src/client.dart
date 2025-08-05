@@ -99,11 +99,22 @@ class BlobinatorClient {
   }
 
   /// Store blob data from bytes.
-  Future<void> putBytes(String blobId, List<int> data) async {
-    final response = await _httpClient.put(
-      Uri.parse('$baseUrl/blobs/$blobId'),
-      body: data,
+  Future<void> putBytes(
+    String blobId,
+    List<int> data, {
+    bool flush = false,
+  }) async {
+    final uri = Uri.parse('$baseUrl/blobs/$blobId');
+    final queryParams = <String, String>{};
+
+    if (flush) {
+      queryParams['flush'] = 'true';
+    }
+
+    final putUri = uri.replace(
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
     );
+    final response = await _httpClient.put(putUri, body: data);
 
     if (response.statusCode == 400) {
       throw BlobinatorException('Invalid blob ID: $blobId');
@@ -117,16 +128,27 @@ class BlobinatorClient {
   }
 
   /// Stream file to blob storage.
-  Future<void> putFile(String blobId, String filePath) async {
+  Future<void> putFile(
+    String blobId,
+    String filePath, {
+    bool flush = false,
+  }) async {
     final file = File(filePath);
     if (!await file.exists()) {
       throw BlobinatorException('File not found: $filePath');
     }
 
-    final request = http.StreamedRequest(
-      'PUT',
-      Uri.parse('$baseUrl/blobs/$blobId'),
+    final uri = Uri.parse('$baseUrl/blobs/$blobId');
+    final queryParams = <String, String>{};
+
+    if (flush) {
+      queryParams['flush'] = 'true';
+    }
+
+    final putUri = uri.replace(
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
     );
+    final request = http.StreamedRequest('PUT', putUri);
     request.contentLength = await file.length();
 
     // Stream the file content

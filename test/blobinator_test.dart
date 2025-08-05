@@ -373,6 +373,102 @@ void main() {
         await memoryOnlyHttpServer.close();
       }
     });
+
+    test('Flush parameter via HTTP API writes to disk immediately', () async {
+      const blobId = 'http-flush-test';
+      final testData = Uint8List.fromList('HTTP flush test data'.codeUnits);
+
+      // Get initial memory count via HTTP status endpoint
+      final initialStatusResponse = await http.get(
+        Uri.parse('$baseUrl/status'),
+      );
+      final initialStatus =
+          jsonDecode(initialStatusResponse.body) as Map<String, dynamic>;
+      final initialMemoryCount = initialStatus['memoryItemCount'] as int;
+
+      // PUT blob with flush=true parameter
+      final putResponse = await http.put(
+        Uri.parse('$baseUrl/blobs/$blobId?flush=true'),
+        body: testData,
+      );
+      expect(putResponse.statusCode, equals(200));
+
+      // Verify blob is NOT in memory (was immediately flushed)
+      final statusAfterResponse = await http.get(Uri.parse('$baseUrl/status'));
+      final statusAfter =
+          jsonDecode(statusAfterResponse.body) as Map<String, dynamic>;
+      expect(statusAfter['memoryItemCount'], equals(initialMemoryCount));
+
+      // Verify blob can still be retrieved
+      final getResponse = await http.get(Uri.parse('$baseUrl/blobs/$blobId'));
+      expect(getResponse.statusCode, equals(200));
+      expect(getResponse.bodyBytes, equals(testData));
+
+      // Verify disk storage was updated
+      expect(
+        statusAfter['diskItemCount'],
+        greaterThan(initialStatus['diskItemCount']),
+      );
+      expect(
+        statusAfter['diskBytesUsed'],
+        greaterThan(initialStatus['diskBytesUsed']),
+      );
+    });
+
+    test('Invalid flush parameter values return 400', () async {
+      const blobId = 'invalid-flush-test';
+      final testData = Uint8List.fromList('test data'.codeUnits);
+
+      // Test invalid flush parameter values
+      final invalidValues = ['invalid', 'yes', 'no', '2', 'maybe'];
+
+      for (final invalidValue in invalidValues) {
+        final putResponse = await http.put(
+          Uri.parse('$baseUrl/blobs/$blobId?flush=$invalidValue'),
+          body: testData,
+        );
+        expect(
+          putResponse.statusCode,
+          equals(400),
+          reason: 'flush=$invalidValue should return 400',
+        );
+        expect(putResponse.body, contains('Invalid flush value'));
+      }
+    });
+
+    test('Valid flush parameter values work correctly', () async {
+      final validValues = [
+        '1',
+        'true',
+        'TRUE',
+        'True',
+        '0',
+        'false',
+        'FALSE',
+        'False',
+      ];
+
+      for (int i = 0; i < validValues.length; i++) {
+        final blobId = 'valid-flush-test-$i';
+        final testData = Uint8List.fromList('test data $i'.codeUnits);
+        final value = validValues[i];
+
+        final putResponse = await http.put(
+          Uri.parse('$baseUrl/blobs/$blobId?flush=$value'),
+          body: testData,
+        );
+        expect(
+          putResponse.statusCode,
+          equals(200),
+          reason: 'flush=$value should succeed',
+        );
+
+        // Verify blob can be retrieved
+        final getResponse = await http.get(Uri.parse('$baseUrl/blobs/$blobId'));
+        expect(getResponse.statusCode, equals(200));
+        expect(getResponse.bodyBytes, equals(testData));
+      }
+    });
   });
 
   group('BlobStorage Unit Tests', () {
@@ -561,5 +657,54 @@ void main() {
       expect(await storage.getSize(nonExistentBlobId), isNull);
       expect(await storage.getLastModified(nonExistentBlobId), isNull);
     });
+
+    test(
+      'Flush parameter immediately writes to disk and removes from memory',
+      () async {
+        const blobId = 'flush-parameter-test';
+        final testData = Uint8List.fromList('test data for flush'.codeUnits);
+
+        // Get initial status to verify no items in memory
+        final initialStatus = storage.getStatus();
+        final initialMemoryCount = initialStatus.memoryItemCount;
+
+        // Put blob with flush=true
+        await storage.put(blobId, testData, flush: true);
+
+        // Verify blob is NOT in memory (was immediately flushed)
+        final statusAfterFlush = storage.getStatus();
+        expect(statusAfterFlush.memoryItemCount, equals(initialMemoryCount));
+
+        // Verify blob exists and can be retrieved
+        expect(await storage.exists(blobId), isTrue);
+
+        final retrievedBlob = await storage.get(blobId);
+        expect(retrievedBlob, isNotNull);
+        expect(retrievedBlob!.data, equals(testData));
+
+        // Verify blob is physically on disk
+        final hash = md5.convert(utf8.encode(blobId)).toString();
+        final dir1 = hash.substring(0, 2);
+        final dir2 = hash.substring(2, 4);
+        final diskFilePath = path.join(tempDir.path, dir1, dir2, blobId);
+        final diskFile = File(diskFilePath);
+
+        expect(await diskFile.exists(), isTrue);
+        expect(await diskFile.length(), equals(testData.length));
+
+        final diskData = await diskFile.readAsBytes();
+        expect(diskData, equals(testData));
+
+        // Verify disk storage stats were updated
+        expect(
+          statusAfterFlush.diskItemCount,
+          greaterThan(initialStatus.diskItemCount),
+        );
+        expect(
+          statusAfterFlush.diskBytesUsed,
+          greaterThan(initialStatus.diskBytesUsed),
+        );
+      },
+    );
   });
 }

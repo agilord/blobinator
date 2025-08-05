@@ -143,7 +143,7 @@ class BlobStorage {
   }
 
   /// Store blob data in memory and disk (if enabled).
-  Future<void> put(String blobId, Uint8List data) async {
+  Future<void> put(String blobId, Uint8List data, {bool flush = false}) async {
     if (!_isValidBlobId(blobId)) {
       throw ArgumentError('Invalid blob ID: $blobId');
     }
@@ -175,6 +175,12 @@ class BlobStorage {
       _diskBytesUsed += data.length;
       _diskItemCount++;
       _diskBlobCache.add(blobId);
+    }
+
+    if (flush && config.diskStoragePath != null) {
+      await _moveToMemoryToDisk(blobId, blobData);
+      _memoryBytesUsed -= blobData.sizeInBytes;
+      _memoryStorage.remove(blobId);
     }
 
     await _checkMemoryLimits();

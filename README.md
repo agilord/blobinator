@@ -42,6 +42,9 @@ Examples:
 - `POST /flush?limit=1000` - Flush oldest 1000 blobs to disk
 - `POST /flush?limit=5k&age=1h` - Flush up to 5000 blobs older than 1 hour
 
+Alternatively, the `PUT /blobs/{id}?flush=true` can be used to immediately flush a blob
+to disk.
+
 ### Blob IDs
 - **Characters**: `[a-z0-9._-]` only
 - **Length**: 4-512 characters

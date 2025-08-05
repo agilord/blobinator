@@ -92,4 +92,35 @@ void main() {
       expect(() => parseAge('-5m'), throwsArgumentError);
     });
   });
+
+  group('parseFlush', () {
+    test('parses true values', () {
+      expect(parseFlush('1'), equals(true));
+      expect(parseFlush('true'), equals(true));
+      expect(parseFlush('TRUE'), equals(true));
+      expect(parseFlush('True'), equals(true));
+    });
+
+    test('parses false values', () {
+      expect(parseFlush('0'), equals(false));
+      expect(parseFlush('false'), equals(false));
+      expect(parseFlush('FALSE'), equals(false));
+      expect(parseFlush('False'), equals(false));
+      expect(parseFlush(''), equals(false));
+    });
+
+    test('handles whitespace', () {
+      expect(parseFlush(' 1 '), equals(true));
+      expect(parseFlush(' true '), equals(true));
+      expect(parseFlush(' 0 '), equals(false));
+      expect(parseFlush(' false '), equals(false));
+    });
+
+    test('throws on invalid input', () {
+      expect(() => parseFlush('invalid'), throwsArgumentError);
+      expect(() => parseFlush('yes'), throwsArgumentError);
+      expect(() => parseFlush('no'), throwsArgumentError);
+      expect(() => parseFlush('2'), throwsArgumentError);
+    });
+  });
 }

@@ -65,13 +65,20 @@ class BlobinatorServer {
     final blobId = request.params['blobId']!;
 
     try {
+      final params = request.url.queryParameters;
+      bool flush = false;
+
+      if (params.containsKey('flush')) {
+        flush = parseFlush(params['flush']!);
+      }
+
       final bodyBytes = await request.read().fold<List<int>>(
         <int>[],
         (previous, element) => previous..addAll(element),
       );
 
       final data = Uint8List.fromList(bodyBytes);
-      await storage.put(blobId, data);
+      await storage.put(blobId, data, flush: flush);
 
       return Response.ok('');
     } catch (e) {

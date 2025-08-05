@@ -1,6 +1,6 @@
 name: blobinator
 description: Tools and HTTP service for temporary binary blob storage.
-version: 0.1.1
+version: 0.1.2
 homepage: https://github.com/agilord/blobinator
 
 executables:

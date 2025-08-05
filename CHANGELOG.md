@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- `flush` parameter on updating a blob will immediately write it to disk.
+
 ## 0.1.1
 
 - `flush` operation to move all or a subset of in-memory blobs to disk.

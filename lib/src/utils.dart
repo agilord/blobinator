@@ -80,3 +80,17 @@ Duration parseAge(String value) {
     return Duration(seconds: number);
   }
 }
+
+bool parseFlush(String value) {
+  final trimmed = value.trim().toLowerCase();
+
+  if (trimmed == '1' || trimmed == 'true') {
+    return true;
+  } else if (trimmed == '0' || trimmed == 'false' || trimmed.isEmpty) {
+    return false;
+  } else {
+    throw ArgumentError(
+      'Invalid flush value: $value. Must be "1", "true", "0", "false", or absent',
+    );
+  }
+}
