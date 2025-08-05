@@ -13,11 +13,12 @@ class BlobinatorClient {
   BlobinatorClient(this.baseUrl, {http.Client? httpClient})
     : _httpClient = httpClient ?? http.Client();
 
+  /// Close the HTTP client.
   void close() {
     _httpClient.close();
   }
 
-  /// Check if a blob exists and get its metadata
+  /// Get blob metadata (size, last-modified).
   Future<BlobMetadata?> head(String blobId) async {
     final response = await _httpClient.head(
       Uri.parse('$baseUrl/blobs/$blobId'),
@@ -42,7 +43,7 @@ class BlobinatorClient {
     );
   }
 
-  /// Get a blob as bytes
+  /// Get blob data as bytes.
   Future<Uint8List?> getBytes(String blobId) async {
     final response = await _httpClient.get(Uri.parse('$baseUrl/blobs/$blobId'));
 
@@ -59,7 +60,7 @@ class BlobinatorClient {
     return Uint8List.fromList(response.bodyBytes);
   }
 
-  /// Get a blob and save it to a file (streaming)
+  /// Stream blob to file, returns true if successful.
   Future<bool> getFile(String blobId, String filePath) async {
     final request = http.Request('GET', Uri.parse('$baseUrl/blobs/$blobId'));
     final streamedResponse = await _httpClient.send(request);
@@ -97,7 +98,7 @@ class BlobinatorClient {
     return true;
   }
 
-  /// Put a blob from bytes
+  /// Store blob data from bytes.
   Future<void> putBytes(String blobId, List<int> data) async {
     final response = await _httpClient.put(
       Uri.parse('$baseUrl/blobs/$blobId'),
@@ -115,7 +116,7 @@ class BlobinatorClient {
     }
   }
 
-  /// Put a blob from a file (streaming)
+  /// Stream file to blob storage.
   Future<void> putFile(String blobId, String filePath) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -148,7 +149,7 @@ class BlobinatorClient {
     }
   }
 
-  /// Delete a blob
+  /// Delete blob, returns true if found.
   Future<bool> delete(String blobId) async {
     final response = await _httpClient.delete(
       Uri.parse('$baseUrl/blobs/$blobId'),
@@ -167,7 +168,7 @@ class BlobinatorClient {
     return true;
   }
 
-  /// Get service status
+  /// Get service statistics and metrics.
   Future<ServiceStatus> getStatus() async {
     final response = await _httpClient.get(Uri.parse('$baseUrl/status'));
 
@@ -181,25 +182,25 @@ class BlobinatorClient {
     return ServiceStatus.fromJson(json);
   }
 
-  /// Check if a blob exists (convenience method)
+  /// Check if blob exists.
   Future<bool> exists(String blobId) async {
     final metadata = await head(blobId);
     return metadata != null;
   }
 
-  /// Get blob size (convenience method)
+  /// Get blob size in bytes.
   Future<int?> getSize(String blobId) async {
     final metadata = await head(blobId);
     return metadata?.size;
   }
 
-  /// Get blob last modified time (convenience method)
+  /// Get blob last modified time.
   Future<DateTime?> getLastModified(String blobId) async {
     final metadata = await head(blobId);
     return metadata?.lastModified;
   }
 
-  /// Flush memory blobs to disk
+  /// Move blobs from memory to disk, returns count flushed.
   Future<int> flush({int? limit, Duration? age}) async {
     final uri = Uri.parse('$baseUrl/flush');
     final queryParams = <String, String>{};

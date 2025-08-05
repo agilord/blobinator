@@ -38,6 +38,7 @@ class BlobStorage {
     return RegExp(r'^[a-z0-9._-]+$').hasMatch(blobId);
   }
 
+  /// Retrieve blob data from memory or disk.
   Future<BlobData?> get(String blobId) async {
     if (!_isValidBlobId(blobId)) return null;
 
@@ -62,6 +63,7 @@ class BlobStorage {
     return null;
   }
 
+  /// Check if blob exists in memory or disk.
   Future<bool> exists(String blobId) async {
     if (!_isValidBlobId(blobId)) return false;
 
@@ -77,6 +79,7 @@ class BlobStorage {
     return false;
   }
 
+  /// Get blob size in bytes, returns -1 if not found.
   Future<int> getSize(String blobId) async {
     if (!_isValidBlobId(blobId)) return -1;
 
@@ -95,6 +98,7 @@ class BlobStorage {
     return -1;
   }
 
+  /// Get blob last modified time.
   Future<DateTime?> getLastModified(String blobId) async {
     if (!_isValidBlobId(blobId)) return null;
 
@@ -114,6 +118,7 @@ class BlobStorage {
     return null;
   }
 
+  /// Store blob data in memory and disk (if enabled).
   Future<void> put(String blobId, Uint8List data) async {
     if (!_isValidBlobId(blobId)) {
       throw ArgumentError('Invalid blob ID: $blobId');
@@ -149,6 +154,7 @@ class BlobStorage {
     await _checkMemoryLimits();
   }
 
+  /// Delete blob from memory and disk, returns true if found.
   Future<bool> delete(String blobId) async {
     if (!_isValidBlobId(blobId)) return false;
 
@@ -215,6 +221,7 @@ class BlobStorage {
     }
   }
 
+  /// Evict expired blobs from memory based on TTL.
   Future<void> checkMemoryTtl() async {
     final cutoff = DateTime.now().subtract(config.memoryTtl);
     final toRemove = <String>[];
@@ -241,6 +248,7 @@ class BlobStorage {
     }
   }
 
+  /// Evict blobs from disk based on limits and TTL.
   Future<void> checkDiskLimits() async {
     if (config.diskStoragePath == null) return;
 
@@ -368,6 +376,7 @@ class BlobStorage {
     _evictionHistory.removeWhere((s) => s.timestamp.isBefore(cutoff));
   }
 
+  /// Move blobs from memory to disk, returns count flushed.
   Future<int> flush({int? limit, Duration? age}) async {
     if (config.diskStoragePath == null) {
       throw StateError('Cannot flush to disk when disk storage is disabled');
@@ -402,6 +411,7 @@ class BlobStorage {
     return flushed;
   }
 
+  /// Get current storage statistics and metrics.
   ServiceStatus getStatus() {
     return ServiceStatus(
       memoryItemCount: _memoryStorage.length,
