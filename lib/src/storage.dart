@@ -13,6 +13,10 @@ class BlobStorage {
   final Map<String, BlobData> _memoryStorage = {};
   final List<EvictionStats> _evictionHistory = [];
 
+  /// Cache of blob IDs that exist on disk to avoid filesystem checks
+  final Set<String> _diskBlobCache = {};
+  bool _diskCacheInitialized = false;
+
   int _memoryBytesUsed = 0;
   int _diskBytesUsed = 0;
   int _diskItemCount = 0;
@@ -38,6 +42,23 @@ class BlobStorage {
     return RegExp(r'^[a-z0-9._-]+$').hasMatch(blobId);
   }
 
+  /// Initialize the disk blob cache by scanning the filesystem
+  Future<void> _initializeDiskCache() async {
+    if (_diskCacheInitialized || config.diskStoragePath == null) return;
+
+    _diskBlobCache.clear();
+    final files = await _getAllDiskFiles();
+
+    for (final fileInfo in files) {
+      final fileName = path.basename(fileInfo.path);
+      if (_isValidBlobId(fileName)) {
+        _diskBlobCache.add(fileName);
+      }
+    }
+
+    _diskCacheInitialized = true;
+  }
+
   /// Retrieve blob data from memory or disk.
   Future<BlobData?> get(String blobId) async {
     if (!_isValidBlobId(blobId)) return null;
@@ -47,9 +68,10 @@ class BlobStorage {
     }
 
     if (config.diskStoragePath != null) {
-      final filePath = _getBlobPath(blobId);
-      final file = File(filePath);
-      if (await file.exists()) {
+      await _initializeDiskCache();
+      if (_diskBlobCache.contains(blobId)) {
+        final filePath = _getBlobPath(blobId);
+        final file = File(filePath);
         final data = await file.readAsBytes();
         final stat = await file.stat();
         return BlobData(
@@ -72,8 +94,8 @@ class BlobStorage {
     }
 
     if (config.diskStoragePath != null) {
-      final filePath = _getBlobPath(blobId);
-      return await File(filePath).exists();
+      await _initializeDiskCache();
+      return _diskBlobCache.contains(blobId);
     }
 
     return false;
@@ -88,9 +110,10 @@ class BlobStorage {
     }
 
     if (config.diskStoragePath != null) {
-      final filePath = _getBlobPath(blobId);
-      final file = File(filePath);
-      if (await file.exists()) {
+      await _initializeDiskCache();
+      if (_diskBlobCache.contains(blobId)) {
+        final filePath = _getBlobPath(blobId);
+        final file = File(filePath);
         return await file.length();
       }
     }
@@ -107,9 +130,10 @@ class BlobStorage {
     }
 
     if (config.diskStoragePath != null) {
-      final filePath = _getBlobPath(blobId);
-      final file = File(filePath);
-      if (await file.exists()) {
+      await _initializeDiskCache();
+      if (_diskBlobCache.contains(blobId)) {
+        final filePath = _getBlobPath(blobId);
+        final file = File(filePath);
         final stat = await file.stat();
         return stat.modified;
       }
@@ -135,10 +159,11 @@ class BlobStorage {
     _memoryBytesUsed += data.length;
 
     if (config.diskStoragePath != null) {
+      await _initializeDiskCache();
       final filePath = _getBlobPath(blobId);
       final file = File(filePath);
 
-      if (await file.exists()) {
+      if (_diskBlobCache.contains(blobId)) {
         final oldSize = await file.length();
         _diskBytesUsed -= oldSize;
         _diskItemCount--;
@@ -149,6 +174,7 @@ class BlobStorage {
       await file.setLastModified(now);
       _diskBytesUsed += data.length;
       _diskItemCount++;
+      _diskBlobCache.add(blobId);
     }
 
     await _checkMemoryLimits();
@@ -167,13 +193,15 @@ class BlobStorage {
     }
 
     if (config.diskStoragePath != null) {
-      final filePath = _getBlobPath(blobId);
-      final file = File(filePath);
-      if (await file.exists()) {
+      await _initializeDiskCache();
+      if (_diskBlobCache.contains(blobId)) {
+        final filePath = _getBlobPath(blobId);
+        final file = File(filePath);
         final size = await file.length();
         await file.delete();
         _diskBytesUsed -= size;
         _diskItemCount--;
+        _diskBlobCache.remove(blobId);
         deleted = true;
       }
     }
@@ -209,15 +237,17 @@ class BlobStorage {
   }
 
   Future<void> _moveToMemoryToDisk(String blobId, BlobData blobData) async {
+    await _initializeDiskCache();
     final filePath = _getBlobPath(blobId);
     final file = File(filePath);
 
-    if (!await file.exists()) {
+    if (!_diskBlobCache.contains(blobId)) {
       await _ensureDirectory(filePath);
       await file.writeAsBytes(blobData.data);
       await file.setLastModified(blobData.lastModified);
       _diskBytesUsed += blobData.sizeInBytes;
       _diskItemCount++;
+      _diskBlobCache.add(blobId);
     }
   }
 
@@ -274,9 +304,11 @@ class BlobStorage {
         if (await file.exists()) {
           final size = await file.length();
           final dirPath = path.dirname(fileInfo.path);
+          final fileName = path.basename(fileInfo.path);
           await file.delete();
           _diskBytesUsed -= size;
           _diskItemCount--;
+          _diskBlobCache.remove(fileName);
           evicted++;
           evictedBytes += size;
 

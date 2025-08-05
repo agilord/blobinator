@@ -506,5 +506,60 @@ void main() {
       expect(retrievedData, isNotNull);
       expect(retrievedData!.data, equals(updatedData));
     });
+
+    test('Disk cache is initialized and maintained correctly', () async {
+      const blobId1 = 'cache-test-1';
+      const blobId2 = 'cache-test-2';
+      final data1 = Uint8List.fromList('data 1'.codeUnits);
+      final data2 = Uint8List.fromList('data 2'.codeUnits);
+
+      // Put first blob and flush it to disk
+      await storage.put(blobId1, data1);
+      await storage.flush();
+
+      // Put second blob directly to disk by flushing
+      await storage.put(blobId2, data2);
+      await storage.flush();
+
+      // Verify both blobs exist using cache (no filesystem access)
+      expect(await storage.exists(blobId1), isTrue);
+      expect(await storage.exists(blobId2), isTrue);
+
+      // Create new storage instance to test cache initialization from disk
+      final newStorage = BlobStorage(storage.config);
+
+      // First call should initialize cache by scanning disk
+      expect(await newStorage.exists(blobId1), isTrue);
+      expect(await newStorage.exists(blobId2), isTrue);
+
+      // Delete one blob and verify cache is updated
+      await newStorage.delete(blobId1);
+      expect(await newStorage.exists(blobId1), isFalse);
+      expect(await newStorage.exists(blobId2), isTrue);
+
+      // Verify the blob is actually gone from disk
+      final hash = md5.convert(utf8.encode(blobId1)).toString();
+      final dir1 = hash.substring(0, 2);
+      final dir2 = hash.substring(2, 4);
+      final diskFilePath = path.join(tempDir.path, dir1, dir2, blobId1);
+      expect(await File(diskFilePath).exists(), isFalse);
+    });
+
+    test('Cache prevents unnecessary filesystem operations', () async {
+      const nonExistentBlobId = 'does-not-exist';
+
+      // Initialize cache by calling exists once
+      await storage.exists('any-id');
+
+      // Multiple calls to exists for non-existent blobs should use cache
+      expect(await storage.exists(nonExistentBlobId), isFalse);
+      expect(await storage.exists(nonExistentBlobId), isFalse);
+      expect(await storage.exists(nonExistentBlobId), isFalse);
+
+      // Verify get/getSize/getLastModified also use cache
+      expect(await storage.get(nonExistentBlobId), isNull);
+      expect(await storage.getSize(nonExistentBlobId), isNull);
+      expect(await storage.getLastModified(nonExistentBlobId), isNull);
+    });
   });
 }
