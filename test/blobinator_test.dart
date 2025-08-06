@@ -386,9 +386,9 @@ void main() {
           jsonDecode(initialStatusResponse.body) as Map<String, dynamic>;
       final initialMemoryCount = initialStatus['memoryItemCount'] as int;
 
-      // PUT blob with flush=true parameter
+      // PUT blob with immediate flush (zero duration)
       final putResponse = await http.put(
-        Uri.parse('$baseUrl/blobs/$blobId?flush=true'),
+        Uri.parse('$baseUrl/blobs/$blobId?flush=0'),
         body: testData,
       );
       expect(putResponse.statusCode, equals(200));
@@ -420,7 +420,7 @@ void main() {
       final testData = Uint8List.fromList('test data'.codeUnits);
 
       // Test invalid flush parameter values
-      final invalidValues = ['invalid', 'yes', 'no', '2', 'maybe'];
+      final invalidValues = ['invalid', 'yes', 'no', 'maybe', '2x', ''];
 
       for (final invalidValue in invalidValues) {
         final putResponse = await http.put(
@@ -432,21 +432,18 @@ void main() {
           equals(400),
           reason: 'flush=$invalidValue should return 400',
         );
-        expect(putResponse.body, contains('Invalid flush value'));
+        expect(
+          putResponse.body,
+          anyOf([
+            contains('Invalid flush'),
+            contains('Flush value cannot be empty'),
+          ]),
+        );
       }
     });
 
     test('Valid flush parameter values work correctly', () async {
-      final validValues = [
-        '1',
-        'true',
-        'TRUE',
-        'True',
-        '0',
-        'false',
-        'FALSE',
-        'False',
-      ];
+      final validValues = ['1', '0', '5s', '10m', '2h', '3d', '60'];
 
       for (int i = 0; i < validValues.length; i++) {
         final blobId = 'valid-flush-test-$i';
@@ -755,8 +752,8 @@ void main() {
         final initialStatus = storage.getStatus();
         final initialMemoryCount = initialStatus.memoryItemCount;
 
-        // Put blob with flush=true
-        await storage.put(blobId, testData, flush: true);
+        // Put blob with immediate flush (zero duration)
+        await storage.put(blobId, testData, flush: Duration.zero);
 
         // Verify blob is NOT in memory (was immediately flushed)
         final statusAfterFlush = storage.getStatus();

@@ -8,9 +8,23 @@ import 'package:path/path.dart' as path;
 import 'config.dart';
 import 'models.dart';
 
+class _MemBlobData extends BlobData {
+  final Duration? flushAfter;
+
+  _MemBlobData({
+    required super.id,
+    required super.data,
+    super.lastModified,
+    this.flushAfter,
+  });
+
+  DateTime? get flushTime =>
+      flushAfter != null ? lastModified.add(flushAfter!) : null;
+}
+
 class BlobStorage {
   final BlobinatorConfig config;
-  final Map<String, BlobData> _memoryStorage = {};
+  final Map<String, _MemBlobData> _memoryStorage = {};
   final List<EvictionStats> _evictionHistory = [];
 
   /// Cache of blob IDs that exist on disk to avoid filesystem checks
@@ -143,13 +157,25 @@ class BlobStorage {
   }
 
   /// Store blob data in memory and disk (if enabled).
-  Future<void> put(String blobId, Uint8List data, {bool flush = false}) async {
+  Future<void> put(String blobId, Uint8List data, {Duration? flush}) async {
     if (!_isValidBlobId(blobId)) {
       throw ArgumentError('Invalid blob ID: $blobId');
     }
 
     final now = DateTime.now();
-    final blobData = BlobData(id: blobId, data: data, lastModified: now);
+
+    // Apply memory TTL limit to flush duration
+    Duration? effectiveFlush = flush;
+    if (flush != null && flush > config.memoryTtl) {
+      effectiveFlush = config.memoryTtl;
+    }
+
+    final blobData = _MemBlobData(
+      id: blobId,
+      data: data,
+      lastModified: now,
+      flushAfter: effectiveFlush,
+    );
 
     if (_memoryStorage.containsKey(blobId)) {
       _memoryBytesUsed -= _memoryStorage[blobId]!.sizeInBytes;
@@ -177,7 +203,10 @@ class BlobStorage {
       _diskBlobCache.add(blobId);
     }
 
-    if (flush && config.diskStoragePath != null) {
+    // Flush immediately if duration is zero or negative
+    if (flush != null &&
+        flush <= Duration.zero &&
+        config.diskStoragePath != null) {
       await _moveToMemoryToDisk(blobId, blobData);
       _memoryBytesUsed -= blobData.sizeInBytes;
       _memoryStorage.remove(blobId);
@@ -242,7 +271,7 @@ class BlobStorage {
     }
   }
 
-  Future<void> _moveToMemoryToDisk(String blobId, BlobData blobData) async {
+  Future<void> _moveToMemoryToDisk(String blobId, _MemBlobData blobData) async {
     await _initializeDiskCache();
     final filePath = _getBlobPath(blobId);
     final file = File(filePath);
@@ -265,6 +294,18 @@ class BlobStorage {
 
     for (final entry in _memoryStorage.entries) {
       if (entry.value.lastModified.isBefore(cutoff)) {
+        toRemove.add(entry.key);
+        evictedBytes += entry.value.sizeInBytes;
+      }
+    }
+
+    // Also check for blobs that need to be flushed based on their individual duration
+    final now = DateTime.now();
+    for (final entry in _memoryStorage.entries) {
+      final flushTime = entry.value.flushTime;
+      if (flushTime != null &&
+          now.isAfter(flushTime) &&
+          !toRemove.contains(entry.key)) {
         toRemove.add(entry.key);
         evictedBytes += entry.value.sizeInBytes;
       }

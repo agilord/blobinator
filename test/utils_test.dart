@@ -94,33 +94,35 @@ void main() {
   });
 
   group('parseFlush', () {
-    test('parses true values', () {
-      expect(parseFlush('1'), equals(true));
-      expect(parseFlush('true'), equals(true));
-      expect(parseFlush('TRUE'), equals(true));
-      expect(parseFlush('True'), equals(true));
+    test('parses duration values', () {
+      expect(parseFlush('1'), equals(Duration(seconds: 1)));
+      expect(parseFlush('0'), equals(Duration.zero));
+      expect(parseFlush('5s'), equals(Duration(seconds: 5)));
+      expect(parseFlush('10m'), equals(Duration(minutes: 10)));
+      expect(parseFlush('2h'), equals(Duration(hours: 2)));
+      expect(parseFlush('3d'), equals(Duration(days: 3)));
     });
 
-    test('parses false values', () {
-      expect(parseFlush('0'), equals(false));
-      expect(parseFlush('false'), equals(false));
-      expect(parseFlush('FALSE'), equals(false));
-      expect(parseFlush('False'), equals(false));
-      expect(parseFlush(''), equals(false));
+    test('parses mixed case units', () {
+      expect(parseFlush('5S'), equals(Duration(seconds: 5)));
+      expect(parseFlush('10M'), equals(Duration(minutes: 10)));
+      expect(parseFlush('2H'), equals(Duration(hours: 2)));
+      expect(parseFlush('3D'), equals(Duration(days: 3)));
     });
 
     test('handles whitespace', () {
-      expect(parseFlush(' 1 '), equals(true));
-      expect(parseFlush(' true '), equals(true));
-      expect(parseFlush(' 0 '), equals(false));
-      expect(parseFlush(' false '), equals(false));
+      expect(parseFlush(' 1 '), equals(Duration(seconds: 1)));
+      expect(parseFlush(' 5s '), equals(Duration(seconds: 5)));
+      expect(parseFlush(' 0 '), equals(Duration.zero));
+      expect(parseFlush(' 10m '), equals(Duration(minutes: 10)));
     });
 
     test('throws on invalid input', () {
       expect(() => parseFlush('invalid'), throwsArgumentError);
       expect(() => parseFlush('yes'), throwsArgumentError);
       expect(() => parseFlush('no'), throwsArgumentError);
-      expect(() => parseFlush('2'), throwsArgumentError);
+      expect(() => parseFlush(''), throwsArgumentError);
+      expect(() => parseFlush('2x'), throwsArgumentError);
     });
   });
 }

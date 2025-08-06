@@ -81,16 +81,41 @@ Duration parseAge(String value) {
   }
 }
 
-bool parseFlush(String value) {
-  final trimmed = value.trim().toLowerCase();
+Duration parseFlush(String value) {
+  final trimmed = value.trim();
 
-  if (trimmed == '1' || trimmed == 'true') {
-    return true;
-  } else if (trimmed == '0' || trimmed == 'false' || trimmed.isEmpty) {
-    return false;
+  if (trimmed.isEmpty) {
+    throw ArgumentError('Flush value cannot be empty');
+  }
+
+  final lowerValue = trimmed.toLowerCase();
+  final lastChar = lowerValue[lowerValue.length - 1];
+
+  if (RegExp(r'[dhms]').hasMatch(lastChar)) {
+    final numPart = trimmed.substring(0, trimmed.length - 1);
+    final number = int.tryParse(numPart);
+
+    if (number == null) {
+      throw ArgumentError('Invalid flush number: $numPart');
+    }
+
+    switch (lastChar) {
+      case 'd':
+        return Duration(days: number);
+      case 'h':
+        return Duration(hours: number);
+      case 'm':
+        return Duration(minutes: number);
+      case 's':
+        return Duration(seconds: number);
+      default:
+        throw ArgumentError('Invalid flush unit: $lastChar');
+    }
   } else {
-    throw ArgumentError(
-      'Invalid flush value: $value. Must be "1", "true", "0", "false", or absent',
-    );
+    final number = int.tryParse(trimmed);
+    if (number == null) {
+      throw ArgumentError('Invalid flush value: $trimmed');
+    }
+    return Duration(seconds: number);
   }
 }

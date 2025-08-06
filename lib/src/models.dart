@@ -11,14 +11,6 @@ class BlobData {
   BlobData({required this.id, required this.data, DateTime? lastModified})
     : lastModified = lastModified ?? DateTime.now();
 
-  BlobData copyWith({String? id, Uint8List? data, DateTime? lastModified}) {
-    return BlobData(
-      id: id ?? this.id,
-      data: data ?? this.data,
-      lastModified: lastModified ?? this.lastModified,
-    );
-  }
-
   int get sizeInBytes => data.length;
 }
 

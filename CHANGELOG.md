@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- New `flush` parameter semantics: specifies the suggested time to flush to disk (but not after the global `mem-ttl` is applied).
+
 ## 0.1.2
 
 - `flush` parameter on updating a blob will immediately write it to disk.

@@ -66,7 +66,7 @@ class BlobinatorServer {
 
     try {
       final params = request.url.queryParameters;
-      bool flush = false;
+      Duration? flush;
 
       if (params.containsKey('flush')) {
         flush = parseFlush(params['flush']!);
