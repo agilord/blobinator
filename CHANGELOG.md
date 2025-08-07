@@ -2,7 +2,7 @@
 
 ## 0.2.0
 
-- New `flush` parameter semantics: specifies the suggested time to flush to disk (but not after the global `mem-ttl` is applied).
+- Full rewrite. Hybrid functionality is kept experimental.
 
 ## 0.1.2
 

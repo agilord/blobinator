@@ -1,125 +1,120 @@
-Dart package and standalone HTTP service for temporary binary blob storage.
+# Blobinator
 
-## Why?
+**Tools and HTTP service for temporary binary blob storage.**
 
-Blobinator provides a simple way to exchange temporary binary data between systems. It's designed for:
-- **Temporary data exchange** - Binary blobs with random identifiers, no metadata required
-- **Short-lived storage** - Data may be evicted or lost, applications must handle retries
-- **Expendable content** - Data written to disk can be deleted automatically
-- **Processing pipelines** - Intermediate data storage between processing steps
-
-**⚠️ Do not use for permanent storage - data will be automatically evicted.**
+Blobinator is a Dart package that provides a key-value store for binary data with versioning, TTL (time-to-live), and HTTP API support. Perfect for temporary file storage, caching, and data exchange.
 
 ## Features
 
-### Two-Tier Storage
-- **Memory tier**: Fast access for recent blobs
-- **Disk tier**: Slower access for evicted blobs
-- **Automatic promotion**: Memory → Disk when limits reached
-- **Configurable limits**: Items, size, and TTL for each tier
+- **Multiple Storage Backends**: In-memory SQLite, file-based SQLite, and hybrid (memory + disk, experimental)
+- **Versioning**: Optimistic concurrency control with automatic version generation
+- **TTL Support**: Automatic expiration and cleanup of expired blobs
+- **HTTP API**: RESTful endpoints for blob operations via built-in server
+- **CLI Tools**: Command-line interface for both server and client operations
+- **Performance**: Optimized SQLite configuration with WAL mode and maintenance tasks
 
-### Configuration
-- **Memory**: 1M items, 1 GiB, 3 days TTL (default)
-- **Disk**: 100M items, 512 GiB, 90 days TTL (default)
-- **Flexible units**: `1m` items, `2GiB` size, `6h` TTL
-- **Optional disk storage**: Memory-only mode available
+## Quick Start
 
-### HTTP API
-- **`GET /blobs/{id}`** - Retrieve blob data
-- **`PUT /blobs/{id}`** - Store blob data
-- **`HEAD /blobs/{id}`** - Get metadata (size, last-modified)
-- **`DELETE /blobs/{id}`** - Remove blob
-- **`POST /flush`** - Move memory blobs to disk storage
-- **`GET /status`** - Service statistics and metrics
-
-#### Flush Endpoint
-The `/flush` endpoint moves blobs from memory to disk storage and supports query parameters:
-- **`limit`** - Maximum number of blobs to flush (e.g., `100`, `1k`, `5m`, `2b`)
-- **`age`** - Only flush blobs older than specified duration (e.g., `30s`, `5m`, `2h`, `1d`)
-
-Examples:
-- `POST /flush` - Flush all memory blobs to disk
-- `POST /flush?limit=1000` - Flush oldest 1000 blobs to disk
-- `POST /flush?limit=5k&age=1h` - Flush up to 5000 blobs older than 1 hour
-
-Alternatively, the `PUT /blobs/{id}?flush=true` can be used to immediately flush a blob
-to disk.
-
-### Blob IDs
-- **Characters**: `[a-zA-Z0-9._~-]` only
-- **Length**: 4-512 characters
-- **Client-generated**: No collision detection, use sufficiently random IDs
-
-### Eviction Strategy
-- **Memory limits**: Checked after every write
-- **Memory TTL**: Checked hourly
-- **Disk limits**: Checked every 8 hours  
-- **Algorithm**: Oldest entries evicted first (by last-modified time)
-- **Statistics**: 7-day eviction history (in-memory only)
-
-## CLI use
-
-Start the blobinator service:
-
-```bash
-# Basic usage (defaults: memory-only, port 8080)
-dart run blobinator serve
-
-# With disk storage
-dart run blobinator serve --disk-storage-path ./blobs
-
-# Custom configuration
-dart run blobinator serve \
-  --port 3000 \
-  --mem-items 500k \
-  --mem-size 2GiB \
-  --mem-ttl 6h \
-  --disk-items 50m \
-  --disk-size 1TB \
-  --disk-ttl 30d \
-  --disk-storage-path ./data/blobs
-```
-
-**Unit formats:**
-- **Items**: `k` (thousands), `m` (millions), `b` (billions)
-- **Size**: `KiB/KB` (kilobytes), `MiB/MB` (megabytes), `GiB/GB` (gigabytes)
-- **TTL**: `s` (seconds), `m` (minutes), `h` (hours), `d` (days)
-
-## HTTP client use
-
+### As a Library
 ```dart
 import 'package:blobinator/blobinator.dart';
 
-final client = BlobinatorClient('http://localhost:8080');
+// Create in-memory storage
+final blobinator = await Blobinator.inMemory();
 
-// Store and retrieve bytes
-await client.putBytes('my-blob', [1, 2, 3, 4]);
-final data = await client.getBytes('my-blob'); // Uint8List?
+// Store binary data
+final key = 'my-key'.codeUnits;
+final data = 'Hello, World!'.codeUnits;
+await blobinator.updateBlob(key, data, ttl: Duration(minutes: 30));
 
-// Store and retrieve files (streaming)
-await client.putFile('large-blob', './input.dat');
-await client.getFile('large-blob', './output.dat'); // bool (success)
-
-// Check existence and metadata
-final exists = await client.exists('my-blob'); // bool
-final size = await client.getSize('my-blob'); // int?
-final lastMod = await client.getLastModified('my-blob'); // DateTime?
-
-// Get detailed metadata
-final metadata = await client.head('my-blob'); // BlobMetadata?
-
-// Delete blobs
-await client.delete('my-blob'); // bool (found and deleted)
-
-// Service status
-final status = await client.getStatus(); // ServiceStatus
-
-// Flush memory blobs to disk
-final flushed = await client.flush(); // int (number of blobs flushed)
-final flushedLimited = await client.flush(limit: 1000); // Flush max 1000 blobs
-final flushedOld = await client.flush(age: Duration(hours: 1)); // Flush blobs older than 1 hour
-final flushedCombined = await client.flush(limit: 500, age: Duration(minutes: 30)); // Combined
+// Retrieve data
+final blob = await blobinator.getBlob(key);
+print(utf8.decode(blob!.bytes)); // Hello, World!
 
 // Clean up
-client.close();
+await blobinator.close();
 ```
+
+### HTTP Server
+```bash
+# Start server with in-memory storage
+dart run blobinator serve --port 8080
+
+# Start with file-based storage
+dart run blobinator serve --port 8080 --path /path/to/storage.db
+
+# Start with hybrid storage (memory cache + disk persistence)
+dart run blobinator serve --port 8080 --hybrid --path /path/to/storage.db
+```
+
+### CLI Client
+```bash
+# Store blob from file
+dart run blobinator client --url http://localhost:8080 update --key mykey --input data.bin --ttl 1h
+
+# Retrieve blob to stdout
+dart run blobinator client --url http://localhost:8080 get --key mykey
+
+# Get metadata
+dart run blobinator client --url http://localhost:8080 get-metadata --key mykey
+
+# Delete blob
+dart run blobinator client --url http://localhost:8080 delete --key mykey
+
+# Server status
+dart run blobinator client --url http://localhost:8080 status
+```
+
+## Storage Backends
+
+- **In-Memory**: Fast, volatile storage using SQLite's `:memory:` database
+- **File-Based**: Persistent SQLite database stored on disk
+- **Hybrid**: Combines fast in-memory access with automatic migration to disk for persistence
+
+## HTTP API
+
+- `GET /status` - Server statistics
+- `HEAD /blobs/{key}` - Blob metadata
+- `GET /blobs/{key}` - Retrieve blob
+- `PUT /blobs/{key}` - Create/update blob
+- `DELETE /blobs/{key}` - Delete blob
+
+Supports UTF-8 and base64-encoded keys, version-based updates, and TTL parameters.
+
+## Installation
+
+Add to your `pubspec.yaml`:
+```yaml
+dependencies:
+  blobinator: ^0.1.2
+```
+
+Or install globally:
+```bash
+dart pub global activate blobinator
+```
+
+## Configuration
+
+```dart
+final config = BlobinatorConfig(
+  keyMaxLength: 1024,        // Maximum key size
+  valueMaxLength: 10 * 1024, // Maximum value size  
+  defaultTtl: Duration(hours: 1), // Default expiration
+);
+```
+
+## Example
+
+See `example/example.dart` for a comprehensive demonstration of HTTP client usage including:
+- Basic CRUD operations
+- Version-based optimistic concurrency control
+- TTL functionality
+- Different key formats (UTF-8, binary, special cases)
+- Error handling and edge cases
+
+```bash
+dart run example/example.dart
+```
+
+For more details, see the API documentation and examples in the repository.
