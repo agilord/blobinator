@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Update dependencies and lints.
+
 ## 0.2.0
 
 - Full rewrite. Hybrid functionality is kept experimental.

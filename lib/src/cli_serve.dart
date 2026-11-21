@@ -27,13 +27,11 @@ class ServeCommand extends Command<void> {
       )
       ..addOption(
         'key-max-length',
-        help:
-            'Maximum key length (supports suffixes: k/kb/kib, m/mb/mib, g/gb/gib)',
+        help: 'Maximum key length (supports suffixes: k/kb/kib, m/mb/mib, g/gb/gib)',
       )
       ..addOption(
         'value-max-length',
-        help:
-            'Maximum value length (supports suffixes: k/kb/kib, m/mb/mib, g/gb/gib)',
+        help: 'Maximum value length (supports suffixes: k/kb/kib, m/mb/mib, g/gb/gib)',
       )
       ..addOption(
         'default-ttl',
@@ -41,8 +39,7 @@ class ServeCommand extends Command<void> {
       )
       ..addOption(
         'path',
-        help:
-            'Path to SQLite database file (uses in-memory storage if not provided)',
+        help: 'Path to SQLite database file (uses in-memory storage if not provided)',
       )
       ..addFlag(
         'hybrid',

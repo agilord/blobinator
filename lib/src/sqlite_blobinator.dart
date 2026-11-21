@@ -157,9 +157,8 @@ class SqliteBlobinator implements Blobinator {
   SqliteBlobinator(
     this._db, {
     BlobinatorConfig? config,
-    String tableName = 'blobs',
-  }) : _config = config ?? BlobinatorConfig(),
-       _tableName = tableName {
+    this._tableName = 'blobs',
+  }) : _config = config ?? BlobinatorConfig() {
     _initializeDatabase();
     _initializeStatistics();
   }
@@ -284,7 +283,7 @@ class SqliteBlobinator implements Blobinator {
         );
       }
     } finally {
-      stmt.dispose();
+      stmt.close();
     }
   }
 
@@ -866,7 +865,7 @@ class SqliteBlobinator implements Blobinator {
     // Clean up prepared statements
     for (final stmt in _statementCache.values) {
       try {
-        stmt.dispose();
+        stmt.close();
       } catch (e) {
         print('Failed to dispose prepared statement: $e');
       }
@@ -875,7 +874,7 @@ class SqliteBlobinator implements Blobinator {
 
     // Close database
     try {
-      _db.dispose();
+      _db.close();
     } catch (e) {
       // Ignore errors if database is already closed
     }
